@@ -1,5 +1,6 @@
 import { Placeholder } from "@/components/Placeholder";
 
-export default function Buy() {
+// Owner: Nistha. Replace the Placeholder with the real screen.
+export default function Screen() {
   return <Placeholder title="Buy surplus" owner="Nistha" description="Listings from other businesses meant for business buyers." />;
 }
