@@ -92,3 +92,38 @@ export type AdminCategoryDto = {
   isActive: boolean;
   listingCount: number;
 };
+
+// ---------- analytics ----------
+export const ANALYTICS_RANGES = [7, 30, 90] as const;
+export type AnalyticsRange = (typeof ANALYTICS_RANGES)[number];
+
+// GET /admin/analytics?days=30
+// users, businesses and listings are the current totals. reservations, impact, daily and topBusinesses
+// cover reservations CREATED in the last `rangeDays` days (days are Sri Lanka time, UTC+05:30).
+export type AdminAnalyticsDto = {
+  rangeDays: number;
+  users: { customers: number; businesses: number; admins: number };
+  businesses: { pending: number; active: number; rejected: number; suspended: number };
+  listings: { active: number; soldOut: number; completed: number; expired: number; cancelled: number };
+  reservations: { total: number; confirmed: number; pickedUp: number; cancelled: number; expired: number };
+  impact: { itemsRescued: number; completedPickups: number; revenueRecovered: number };
+  daily: { date: string; reserved: number; pickedUp: number }[];
+  topBusinesses: { businessId: string; name: string; city: string; itemsRescued: number; pickups: number }[];
+};
+
+// ---------- audit log ----------
+// GET /admin/audit-logs?action=&entityType=&cursor=&limit=
+export type AuditLogDto = {
+  id: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  metadata: unknown;
+  createdAt: string;
+  actor: { id: string; fullName: string; email: string } | null;
+};
+export type AuditLogPage = {
+  items: AuditLogDto[];
+  nextCursor: string | null; // send it back as ?cursor= to get the next page
+  actions: string[]; // every action name that exists, for the filter
+};
