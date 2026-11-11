@@ -100,7 +100,7 @@ export const cancelListingSchema = z.object({
 });
 export type CancelListingInput = z.infer<typeof cancelListingSchema>;
 
-export type ListingImageDto = { id: string; imageUrl: string; isPrimary: boolean; displayOrder: number };
+export type SellerListingImageDto = { id: string; imageUrl: string; isPrimary: boolean; displayOrder: number };
 
 export type SellerListingDto = {
   id: string;
@@ -118,7 +118,7 @@ export type SellerListingDto = {
   audience: ListingAudience;
   // EXPIRED as soon as the pickup window has ended, even before the background job updates the row.
   status: ListingStatus;
-  images: ListingImageDto[];
+  images: SellerListingImageDto[];
   reservations: { active: number; pickedUp: number };
   createdAt: string;
   updatedAt: string;
