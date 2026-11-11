@@ -1,10 +1,12 @@
 import { Platform } from "react-native";
 import type {
+  ActivityPeriod,
   CancelListingInput,
   CategoryDto,
   CreateListingInput,
   ListingImageType,
   ListingImageUploadDto,
+  SellerActivityDto,
   SellerBusinessDto,
   SellerListingDto,
   SellerOrderDto,
@@ -86,6 +88,8 @@ export function fetchOrders(status: SellerOrderFilter = "ALL", listingId?: strin
   const query = `status=${status}${listingId ? `&listingId=${listingId}` : ""}`;
   return apiFetch<SellerOrderDto[]>(`/seller/orders?${query}`);
 }
+export const fetchOrder = (id: string) => apiFetch<SellerOrderDto>(`/seller/orders/${id}`);
+export const fetchActivity = (period: ActivityPeriod) => apiFetch<SellerActivityDto>(`/seller/activity?period=${period}`);
 export const verifyPickupCode = (code: string) =>
   apiFetch<SellerOrderDto>("/seller/orders/verify", { method: "POST", body: { code } });
 export const confirmPickup = (code: string) =>
