@@ -15,7 +15,7 @@ const select = {
   cancelledAt: true,
   cancelReason: true,
   createdAt: true,
-  buyer: { select: { fullName: true, role: true } },
+  buyer: { select: { fullName: true, role: true, phone: true } },
   listing: {
     select: {
       id: true,
@@ -41,7 +41,7 @@ function toDto(r: Row): SellerOrderDto {
     cancelledAt: r.cancelledAt?.toISOString() ?? null,
     cancelReason: r.cancelReason,
     createdAt: r.createdAt.toISOString(),
-    buyer: { fullName: r.buyer.fullName, isBusiness: r.buyer.role === "BUSINESS" },
+    buyer: { fullName: r.buyer.fullName, isBusiness: r.buyer.role === "BUSINESS", phone: r.buyer.phone },
     listing: {
       id: r.listing.id,
       title: r.listing.title,
@@ -69,6 +69,12 @@ export async function listOrders(
     take: 200,
   });
   return rows.map(toDto);
+}
+
+export async function getOrder(businessId: string, orderId: string): Promise<SellerOrderDto> {
+  const row = await prisma.reservation.findFirst({ where: { id: orderId, listing: { businessId } }, select });
+  if (!row) throw new ApiError(404, "ORDER_NOT_FOUND", "Reservation not found");
+  return toDto(row);
 }
 
 // The same "wrong code" answer for unknown codes and for other shops' codes.
