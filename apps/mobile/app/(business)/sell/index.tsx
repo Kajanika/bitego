@@ -1,4 +1,4 @@
-import { ListingsScreen } from "@/features/listings/ListingsScreen";
+import { DashboardScreen } from "@/features/listings/DashboardScreen";
 
-// Owner: Kajanika.
-export default ListingsScreen;
+// Owner: Kajanika. The seller dashboard.
+export default DashboardScreen;
