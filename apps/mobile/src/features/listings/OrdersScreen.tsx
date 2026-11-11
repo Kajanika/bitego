@@ -1,101 +1,141 @@
 import { useRouter } from "expo-router";
-import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
-import type { ReservationStatus, SellerOrderDto } from "@bitego/shared";
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { SellerOrderDto } from "@bitego/shared";
 import { fetchOrders } from "@/api/seller";
-import { color, formatDay, formatPrice, formatQuantity, formatTime, formatWindow } from "./design";
-import { Btn, EmptyState, FoodImage, LoadError, OrderBadge, Page, PageHead, SkeletonCards, Surface, Tabs, useFocusData } from "./kit";
+import { color, formatDay, formatPrice, formatQuantity, formatShortDate, formatTime, formatWindow, isToday, reservationRef, shadow } from "./design";
+import { Icon } from "./Icon";
+import { Avatar, Btn, EmptyState, FoodImage, Gradient, LoadError, OrderBadge, Page, PillTabs, SimpleHeader, SkeletonCards, useFocusData } from "./kit";
 
-const TABS: { value: ReservationStatus; label: string }[] = [
-  { value: "CONFIRMED", label: "Upcoming" },
-  { value: "PICKED_UP", label: "Completed" },
-  { value: "CANCELLED", label: "Cancelled" },
-  { value: "EXPIRED", label: "No-show" },
-];
+type Tab = "upcoming" | "picked" | "history";
 
-const EMPTY_TEXT: Record<ReservationStatus, { title: string; text: string }> = {
-  CONFIRMED: { title: "No upcoming pickups", text: "When someone reserves your food, it will appear here." },
-  PICKED_UP: { title: "No completed pickups", text: "Orders you hand over will appear here." },
-  CANCELLED: { title: "No cancelled reservations", text: "Cancelled reservations will appear here." },
-  EXPIRED: { title: "No no-shows", text: "Reservations not collected before the pickup deadline will appear here." },
+// Defined outside the component so it stays the same function between renders.
+const loadAll = () => fetchOrders("ALL");
+
+const inTab = (o: SellerOrderDto, tab: Tab) =>
+  tab === "upcoming" ? o.status === "CONFIRMED" : tab === "picked" ? o.status === "PICKED_UP" : o.status === "CANCELLED" || o.status === "EXPIRED";
+
+const EMPTY: Record<Tab, { title: string; text: string }> = {
+  upcoming: { title: "No upcoming pickups", text: "When someone reserves your food, it will appear here." },
+  picked: { title: "No completed pickups", text: "Orders you hand over will appear here." },
+  history: { title: "No cancelled or missed pickups", text: "Cancelled reservations and no-shows will appear here." },
 };
 
-function OrderCard({ order, onCheck }: { order: SellerOrderDto; onCheck: () => void }) {
-  const lastLabel = order.status === "PICKED_UP" ? "Picked up" : "Pickup";
-  const lastValue =
-    order.status === "PICKED_UP" && order.pickedUpAt
-      ? `${formatDay(new Date(order.pickedUpAt))}, ${formatTime(new Date(order.pickedUpAt))}`
-      : formatWindow(order.listing.pickupStart, order.listing.pickupEnd);
+export function ReservationCard({ order, onOpen, onVerify }: { order: SellerOrderDto; onOpen: () => void; onVerify?: () => void }) {
+  const picked = order.status === "PICKED_UP" && order.pickedUpAt;
   return (
-    <Surface style={styles.card}>
+    <View style={styles.card}>
       <View style={styles.top}>
-        <FoodImage uri={order.listing.imageUrl} style={styles.image} />
-        <View style={styles.topText}>
-          <OrderBadge status={order.status} />
-          <Text style={styles.title} numberOfLines={2}>{order.listing.title}</Text>
-          <Text style={styles.buyer} numberOfLines={1}>{order.buyer.fullName}{order.buyer.isBusiness ? " · Business buyer" : ""}</Text>
+        <Avatar name={order.buyer.fullName} />
+        <View style={styles.flex}>
+          <Text style={styles.name} numberOfLines={1}>{order.buyer.fullName}{order.buyer.isBusiness ? " · Business" : ""}</Text>
+          <Text style={styles.ref}>{reservationRef(order.id)} • {formatShortDate(new Date(order.createdAt))}</Text>
+        </View>
+        <OrderBadge status={order.status} isNew={isToday(new Date(order.createdAt))} />
+      </View>
+      <View style={styles.food}>
+        <FoodImage uri={order.listing.imageUrl} style={styles.foodImage} />
+        <View style={styles.flex}>
+          <Text style={styles.foodName} numberOfLines={1}>{order.listing.title}</Text>
+          <Text style={styles.foodMeta}>{formatQuantity(order.quantity, order.listing.unit)} • {formatPrice(order.totalPrice)}</Text>
         </View>
       </View>
-      <View style={styles.meta}>
-        <View style={styles.metaCell}>
-          <Text style={styles.metaLabel}>Quantity</Text>
-          <Text style={styles.metaValue}>{formatQuantity(order.quantity, order.listing.unit)}</Text>
-        </View>
-        <View style={[styles.metaCell, styles.metaDivider]}>
-          <Text style={styles.metaLabel}>{order.status === "CONFIRMED" ? "To collect" : "Total"}</Text>
-          <Text style={[styles.metaValue, order.totalPrice === 0 && styles.free]}>{formatPrice(order.totalPrice)}</Text>
+      <View style={styles.time}>
+        <Icon name="clock" size={17} color={color.warnText} />
+        <View>
+          <Text style={styles.timeLabel}>{picked ? "Collected" : order.status === "EXPIRED" ? "Deadline passed" : "Pickup window"}</Text>
+          <Text style={styles.timeValue}>
+            {picked ? `${formatDay(new Date(order.pickedUpAt!))}, ${formatTime(new Date(order.pickedUpAt!))}` : formatWindow(order.listing.pickupStart, order.listing.pickupEnd)}
+          </Text>
         </View>
       </View>
-      <Text style={styles.metaLabel}>{lastLabel}</Text>
-      <Text style={styles.when}>{lastValue}</Text>
-      {order.cancelReason ? <Text style={styles.reason}>{order.cancelReason}</Text> : null}
-      {order.status === "EXPIRED" ? <Text style={styles.reason}>This reservation was not collected before the pickup deadline.</Text> : null}
-      {order.status === "CONFIRMED" ? <Btn title="Check pickup code" onPress={onCheck} style={styles.check} /> : null}
-    </Surface>
+      <View style={styles.actions}>
+        <Btn title="View details" variant="secondary" iconRight="chevron" small onPress={onOpen} style={onVerify ? styles.narrow : styles.flex} />
+        {onVerify ? <Btn title="Verify pickup" icon="check" small onPress={onVerify} style={styles.wide} /> : null}
+      </View>
+    </View>
   );
 }
 
 export function OrdersScreen() {
   const router = useRouter();
-  const [tab, setTab] = useState<ReservationStatus>("CONFIRMED");
-  const load = useCallback(() => fetchOrders(tab), [tab]);
-  const { data, error, refreshing, refresh, retry } = useFocusData(load);
-  const goVerify = () => router.push("/orders/verify");
+  const [tab, setTab] = useState<Tab>("upcoming");
+  const { data, error, refreshing, refresh, retry } = useFocusData(loadAll);
 
-  // Hides the previous tab's rows while the new tab loads.
-  const orders = data?.filter((o) => o.status === tab);
+  const all = data ?? [];
+  const shown = all.filter((o) => inTab(o, tab));
+  const todayCount = all.filter((o) => o.status === "CONFIRMED" && isToday(new Date(o.listing.pickupEnd))).length;
 
   return (
-    <Page refreshing={refreshing} onRefresh={refresh}>
-      <PageHead title="Orders" subtitle="Keep track of every reserved pickup." />
-      <Btn title="Check a pickup code" icon="shield" onPress={goVerify} style={styles.verify} />
-      <Tabs options={TABS} value={tab} onChange={setTab} />
-      {error && !data ? <LoadError message={error} onRetry={retry} /> : null}
-      {!error && !data ? <SkeletonCards /> : null}
-      {orders && orders.length === 0 ? <EmptyState icon="receipt" {...EMPTY_TEXT[tab]} /> : null}
-      <View style={styles.list}>
-        {orders?.map((o) => <OrderCard key={o.id} order={o} onCheck={goVerify} />)}
+    <Page padded={false} refreshing={refreshing} onRefresh={refresh}>
+      <Gradient direction="vertical" stops={[[color.topGlow], [color.page]]}>
+        <SimpleHeader
+          title="Reservations"
+          subtitle="Prepare and verify pickups quickly"
+          action={
+            <Pressable accessibilityRole="button" accessibilityLabel="Check a pickup code" onPress={() => router.push("/orders/verify")} style={styles.scanBtn}>
+              <Icon name="shield" color={color.primary} />
+            </Pressable>
+          }
+        />
+      </Gradient>
+      <View style={styles.tabs}>
+        <PillTabs
+          value={tab}
+          onChange={setTab}
+          options={[
+            { value: "upcoming", label: "Upcoming", icon: "receipt", count: all.filter((o) => inTab(o, "upcoming")).length },
+            { value: "picked", label: "Picked up", icon: "check", count: all.filter((o) => inTab(o, "picked")).length },
+            { value: "history", label: "History", icon: "clock", count: all.filter((o) => inTab(o, "history")).length },
+          ]}
+        />
+      </View>
+      <View style={styles.content}>
+        {data ? (
+          <View style={styles.dateRow}>
+            <Text style={styles.dateTitle}>{tab === "upcoming" ? "Today" : tab === "picked" ? "Collected" : "Closed"}</Text>
+            <Text style={styles.dateSub}>{tab === "upcoming" ? `${todayCount} pickup${todayCount === 1 ? "" : "s"} due today` : `${shown.length} reservation${shown.length === 1 ? "" : "s"}`}</Text>
+          </View>
+        ) : null}
+        {error && !data ? <LoadError message={error} onRetry={retry} /> : null}
+        {!error && !data ? <SkeletonCards /> : null}
+        {data && shown.length === 0 ? <EmptyState icon="receipt" {...EMPTY[tab]} /> : null}
+        <View style={styles.list}>
+          {shown.map((o) => (
+            <ReservationCard
+              key={o.id}
+              order={o}
+              onOpen={() => router.push(`/orders/${o.id}`)}
+              onVerify={o.status === "CONFIRMED" ? () => router.push("/orders/verify") : undefined}
+            />
+          ))}
+        </View>
       </View>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  verify: { marginBottom: 14 },
-  list: { gap: 12 },
-  card: { padding: 12, borderRadius: 19 },
-  top: { flexDirection: "row", gap: 12 },
-  image: { width: 92, height: 92, borderRadius: 14 },
-  topText: { flex: 1, minWidth: 0, gap: 5, alignItems: "flex-start" },
-  title: { fontSize: 16, fontWeight: "700", letterSpacing: -0.3, color: color.text },
-  buyer: { fontSize: 13, color: color.muted },
-  meta: { flexDirection: "row", marginTop: 13, marginBottom: 11, paddingVertical: 12, borderTopWidth: 1, borderBottomWidth: 1, borderColor: color.line },
-  metaCell: { flex: 1, gap: 3 },
-  metaDivider: { paddingLeft: 11, borderLeftWidth: 1, borderLeftColor: color.line },
-  metaLabel: { fontSize: 12, color: color.muted },
-  metaValue: { fontSize: 14, fontWeight: "700", color: color.text },
-  free: { color: color.primary },
-  when: { fontSize: 14, fontWeight: "700", color: color.text, marginTop: 3 },
-  reason: { marginTop: 10, padding: 11, borderRadius: 11, backgroundColor: color.surface2, fontSize: 12, lineHeight: 18, color: color.muted, overflow: "hidden" },
-  check: { marginTop: 12 },
+  flex: { flex: 1 },
+  narrow: { flex: 0.8 },
+  wide: { flex: 1.2 },
+  scanBtn: { width: 46, height: 46, borderRadius: 14, borderWidth: 1, borderColor: "#FAD9BF", backgroundColor: color.tintSoft, alignItems: "center", justifyContent: "center" },
+  tabs: { paddingHorizontal: 14 },
+  content: { paddingHorizontal: 18, paddingTop: 16 },
+  dateRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 11 },
+  dateTitle: { fontSize: 16, fontWeight: "800", color: color.text },
+  dateSub: { fontSize: 12, color: color.muted },
+  list: { gap: 13 },
+  card: { padding: 13, borderRadius: 18, borderWidth: 1, borderColor: color.softLine, backgroundColor: color.surface, ...shadow },
+  top: { flexDirection: "row", alignItems: "center", gap: 10 },
+  name: { fontSize: 14, fontWeight: "700", color: color.text },
+  ref: { fontSize: 11, color: color.muted, marginTop: 2 },
+  food: { flexDirection: "row", alignItems: "center", gap: 10, padding: 9, borderRadius: 13, backgroundColor: color.page, marginVertical: 12 },
+  foodImage: { width: 52, height: 52, borderRadius: 10 },
+  foodName: { fontSize: 14, fontWeight: "700", color: color.text },
+  foodMeta: { fontSize: 12, color: color.muted, marginTop: 3 },
+  time: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  timeLabel: { fontSize: 11, color: color.muted },
+  timeValue: { fontSize: 13, fontWeight: "700", color: color.text, marginTop: 1 },
+  actions: { flexDirection: "row", gap: 7 },
 });
