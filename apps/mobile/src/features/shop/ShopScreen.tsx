@@ -1,12 +1,12 @@
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import type { BusinessType } from "@bitego/shared";
 import { fetchMyBusiness } from "@/api/seller";
 import { useAuth } from "@/features/auth/AuthProvider";
-import { color, initials } from "@/features/listings/design";
+import { color, images, shadow } from "@/features/listings/design";
 import { Icon, type IconName } from "@/features/listings/Icon";
-import { Btn, ConfirmDialog, InfoIcon, LoadError, Page, PageHead, SectionTitle, SkeletonCards, Surface, useFocusData } from "@/features/listings/kit";
+import { Badge, ConfirmDialog, LoadError, NoticeDialog, Page, SkeletonCards, useFocusData } from "@/features/listings/kit";
 
 export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   RESTAURANT: "Restaurant",
@@ -19,84 +19,97 @@ export const BUSINESS_TYPE_LABELS: Record<BusinessType, string> = {
   OTHER: "Other",
 };
 
-function InfoRow({ icon, label, value, onPress }: { icon: IconName; label: string; value: string; onPress?: () => void }) {
-  const body = (
-    <>
-      <InfoIcon icon={icon} />
-      <View style={styles.infoText}>
-        <Text style={styles.infoLabel}>{label}</Text>
-        <Text style={styles.infoValue}>{value}</Text>
-      </View>
-      {onPress ? <Icon name="chevron" size={18} color={color.muted2} /> : null}
-    </>
-  );
-  return onPress ? (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [styles.infoRow, pressed && styles.pressed]}>{body}</Pressable>
-  ) : (
-    <View style={styles.infoRow}>{body}</View>
-  );
-}
+type Row = { icon: IconName; label: string; sub?: string; to?: Href };
+const groups: { title: string; rows: Row[] }[] = [
+  { title: "Personal account", rows: [{ icon: "user", label: "Personal Information" }, { icon: "phone", label: "Contact Information" }] },
+  {
+    title: "Business account",
+    rows: [
+      { icon: "store", label: "Business Profile", to: "/shop/edit" },
+      { icon: "shield", label: "Business Verification", to: "/shop/verification" },
+      { icon: "pin", label: "Shop Location", to: "/shop/location" },
+      { icon: "clock", label: "Opening Hours" },
+      { icon: "box", label: "Pickup Settings" },
+    ],
+  },
+  { title: "Preferences", rows: [{ icon: "bell", label: "Notification Settings" }, { icon: "moon", label: "Dark Mode", sub: "Off" }] },
+  { title: "Security & privacy", rows: [{ icon: "lock", label: "Change Password" }, { icon: "shield", label: "Privacy & Permissions" }] },
+  {
+    title: "Support",
+    rows: [
+      { icon: "help", label: "Help Center & FAQs", to: "/shop/info?page=help" },
+      { icon: "mail", label: "Contact Support" },
+      { icon: "receipt", label: "Terms & Conditions", to: "/shop/info?page=terms" },
+      { icon: "info", label: "About BiteGo", to: "/shop/info?page=about" },
+    ],
+  },
+  { title: "More", rows: [{ icon: "settings", label: "Additional Settings" }] },
+];
 
+// The design's Account screen. Rows without a backend yet open a "coming soon" message.
 export function ShopScreen() {
   const router = useRouter();
   const { profile, signOut } = useAuth();
   const { data: shop, error, refreshing, refresh, retry } = useFocusData(fetchMyBusiness);
   const [loggingOut, setLoggingOut] = useState(false);
-
-  const openMap = () => {
-    if (shop) void Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${shop.latitude},${shop.longitude}`);
-  };
+  const [soon, setSoon] = useState<string | null>(null);
+  const verified = profile?.business?.status === "ACTIVE";
 
   return (
     <Page refreshing={refreshing} onRefresh={refresh}>
-      <PageHead title="Shop" subtitle="Your business profile and pickup location." />
+      <Text style={styles.title}>Account</Text>
       {error && !shop ? <LoadError message={error} onRetry={retry} /> : null}
-      {!error && !shop ? <SkeletonCards count={2} /> : null}
+      {!error && !shop ? <SkeletonCards count={1} /> : null}
       {shop ? (
-        <>
-          <Surface style={styles.profile}>
-            <View style={styles.avatar}><Text style={styles.avatarText}>{initials(shop.name)}</Text></View>
-            <View style={styles.profileText}>
-              <Text style={styles.name} numberOfLines={2}>{shop.name}</Text>
-              <Text style={styles.small}>{BUSINESS_TYPE_LABELS[shop.type]} · {shop.city}</Text>
-              <View style={styles.verifiedRow}>
-                <View style={styles.verified}><Icon name="check" size={10} color="#fff" /></View>
-                <Text style={styles.verifiedText}>Verified provider</Text>
-              </View>
-            </View>
-            <Pressable accessibilityRole="button" onPress={() => router.push("/shop/edit")} style={({ pressed }) => [styles.editBtn, pressed && styles.pressed]}>
-              <Text style={styles.editText}>Edit</Text>
-            </Pressable>
-          </Surface>
-
-          <View style={styles.stats}>
-            <Stat value={String(shop.stats.activeListings)} label="Active listings" />
-            <Stat value={String(shop.stats.itemsRescued)} label="Items rescued" divider />
-            <Stat value={shop.stats.averageRating === null ? "–" : shop.stats.averageRating.toFixed(1)} label={shop.stats.reviewCount === 1 ? "1 review" : `${shop.stats.reviewCount} reviews`} divider />
+        <Pressable accessibilityRole="button" onPress={() => router.push("/shop/edit")} style={({ pressed }) => [styles.shopCard, pressed && styles.pressed]}>
+          <View style={styles.logo}>
+            {shop.logoUrl ? <Image source={{ uri: shop.logoUrl }} style={styles.logoImage} /> : <Image source={images.logoMark} style={styles.logoMark} resizeMode="contain" />}
           </View>
-
-          {shop.description ? <Text style={styles.description}>{shop.description}</Text> : null}
-
-          <SectionTitle>Shop details</SectionTitle>
-          <Surface style={styles.list}>
-            <InfoRow
-              icon="pin"
-              label="Pickup location"
-              value={[shop.addressLine, shop.city, shop.district].filter(Boolean).join(", ")}
-              onPress={openMap}
-            />
-            <InfoRow icon="phone" label="Contact number" value={shop.contactNo} />
-            {shop.email ? <InfoRow icon="mail" label="Business email" value={shop.email} /> : null}
-            {shop.registrationNo ? <InfoRow icon="tag" label="Registration number" value={shop.registrationNo} /> : null}
-          </Surface>
-
-          <SectionTitle>Account</SectionTitle>
-          <Surface style={styles.list}>
-            <InfoRow icon="user" label={profile?.fullName ?? "Owner"} value={profile?.email ?? ""} />
-          </Surface>
-          <Btn title="Log out" icon="logout" variant="ghost" onPress={() => setLoggingOut(true)} style={styles.logout} />
-        </>
+          <View style={styles.flex}>
+            <Text style={styles.shopName} numberOfLines={2}>{shop.name}</Text>
+            <Text style={styles.shopSub}>{BUSINESS_TYPE_LABELS[shop.type]} · Manage your business account</Text>
+            {verified ? <Badge label="Verified business" tone="orange" icon="shield" /> : null}
+          </View>
+          <Icon name="chevron" size={18} color={color.muted} />
+        </Pressable>
       ) : null}
+
+      {shop ? (
+        <View style={styles.stats}>
+          <Stat value={String(shop.stats.activeListings)} label="Active listings" />
+          <Stat value={String(shop.stats.itemsRescued)} label="Items rescued" divider />
+          <Stat value={shop.stats.averageRating === null ? "–" : `${shop.stats.averageRating.toFixed(1)} ★`} label={shop.stats.reviewCount === 1 ? "1 review" : `${shop.stats.reviewCount} reviews`} divider />
+        </View>
+      ) : null}
+
+      {groups.map((g) => (
+        <View key={g.title} style={styles.group}>
+          <Text style={styles.groupTitle}>{g.title.toUpperCase()}</Text>
+          <View style={styles.menu}>
+            {g.rows.map((r, i) => (
+              <Pressable
+                key={r.label}
+                accessibilityRole="button"
+                onPress={() => (r.to ? router.push(r.to) : setSoon(r.label))}
+                style={({ pressed }) => [styles.row, i < g.rows.length - 1 && styles.rowBorder, pressed && styles.pressed]}
+              >
+                <View style={styles.rowIcon}><Icon name={r.icon} size={18} color={color.primary} /></View>
+                <View style={styles.flex}>
+                  <Text style={styles.rowLabel}>{r.label}</Text>
+                  {r.label === "Business Verification" ? <Text style={styles.rowSub}>{verified ? "Verified" : "Pending"}</Text> : r.sub ? <Text style={styles.rowSub}>{r.sub}</Text> : !r.to ? <Text style={styles.rowSoon}>Coming soon</Text> : null}
+                </View>
+                <Icon name="chevron" size={18} color="#9CA3AF" />
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ))}
+
+      <Pressable accessibilityRole="button" onPress={() => setLoggingOut(true)} style={({ pressed }) => [styles.logout, pressed && styles.pressed]}>
+        <Icon name="logout" size={20} color={color.error} />
+        <Text style={styles.logoutText}>Log Out</Text>
+      </Pressable>
+      <Text style={styles.version}>BiteGo for Business · v1.0.0</Text>
 
       <ConfirmDialog
         visible={loggingOut}
@@ -104,12 +117,17 @@ export function ShopScreen() {
         title="Log out?"
         message="You'll need to log in again to manage your listings."
         confirmLabel="Log out"
-        cancelLabel="Cancel"
         onConfirm={() => {
           setLoggingOut(false);
           void signOut();
         }}
         onClose={() => setLoggingOut(false)}
+      />
+      <NoticeDialog
+        visible={soon !== null}
+        title={`${soon ?? ""} is coming soon`}
+        message="This part of the account isn't available in BiteGo yet. Your listings, reservations and shop profile work as normal."
+        onClose={() => setSoon(null)}
       />
     </Page>
   );
@@ -125,28 +143,30 @@ function Stat({ value, label, divider }: { value: string; label: string; divider
 }
 
 const styles = StyleSheet.create({
-  pressed: { opacity: 0.8 },
-  profile: { flexDirection: "row", alignItems: "center", gap: 11, padding: 14, borderRadius: 18 },
-  avatar: { width: 56, height: 56, borderRadius: 18, backgroundColor: color.mid, alignItems: "center", justifyContent: "center" },
-  avatarText: { fontSize: 18, fontWeight: "800", color: "#fff" },
-  profileText: { flex: 1, minWidth: 0, gap: 3 },
-  name: { fontSize: 16, fontWeight: "700", letterSpacing: -0.3, color: color.text },
-  small: { fontSize: 12, color: color.muted },
-  verifiedRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 2 },
-  verified: { width: 15, height: 15, borderRadius: 8, backgroundColor: color.mid, alignItems: "center", justifyContent: "center" },
-  verifiedText: { fontSize: 11, fontWeight: "600", color: color.primary },
-  editBtn: { minHeight: 34, paddingHorizontal: 12, borderRadius: 11, backgroundColor: color.tintSoft, alignItems: "center", justifyContent: "center" },
-  editText: { fontSize: 13, fontWeight: "700", color: color.primary },
-  stats: { flexDirection: "row", marginTop: 14, paddingVertical: 15, paddingHorizontal: 4, borderRadius: 17, backgroundColor: "#E8782A" },
+  flex: { flex: 1 },
+  pressed: { opacity: 0.85 },
+  title: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5, color: color.text, paddingTop: 10, paddingBottom: 12 },
+  shopCard: { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: color.softLine, backgroundColor: color.surface, ...shadow },
+  logo: { width: 60, height: 60, borderRadius: 17, backgroundColor: color.tintSoft, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  logoImage: { width: "100%", height: "100%" },
+  logoMark: { width: "70%", height: "70%" },
+  shopName: { fontSize: 17, fontWeight: "800", color: color.text },
+  shopSub: { fontSize: 12, color: color.muted, marginTop: 2, marginBottom: 6 },
+  stats: { flexDirection: "row", marginTop: 12, paddingVertical: 14, borderRadius: 16, backgroundColor: color.tintSoft, borderWidth: 1, borderColor: color.tintBorder },
   stat: { flex: 1, alignItems: "center", gap: 3 },
-  statDivider: { borderLeftWidth: 1, borderLeftColor: "rgba(255,255,255,0.25)" },
-  statValue: { fontSize: 17, fontWeight: "800", color: "#fff" },
-  statLabel: { fontSize: 11, color: "rgba(255,255,255,0.85)" },
-  description: { marginTop: 16, fontSize: 14, lineHeight: 21, color: color.muted },
-  list: { paddingHorizontal: 13, paddingVertical: 3, shadowOpacity: 0, elevation: 0 },
-  infoRow: { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 11 },
-  infoText: { flex: 1, minWidth: 0, gap: 2 },
-  infoLabel: { fontSize: 12, color: color.muted },
-  infoValue: { fontSize: 14, fontWeight: "600", color: color.text },
-  logout: { marginTop: 14 },
+  statDivider: { borderLeftWidth: 1, borderLeftColor: color.tintBorder },
+  statValue: { fontSize: 18, fontWeight: "800", color: color.primary },
+  statLabel: { fontSize: 11, color: color.muted },
+  group: { marginTop: 20 },
+  groupTitle: { fontSize: 11, fontWeight: "800", letterSpacing: 1, color: color.muted, marginLeft: 6, marginBottom: 8 },
+  menu: { paddingHorizontal: 13, borderRadius: 17, borderWidth: 1, borderColor: color.softLine, backgroundColor: color.surface },
+  row: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 11 },
+  rowBorder: { borderBottomWidth: 1, borderBottomColor: color.softLine },
+  rowIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: color.tintSoft, alignItems: "center", justifyContent: "center" },
+  rowLabel: { fontSize: 14, fontWeight: "700", color: color.text },
+  rowSub: { fontSize: 12, color: color.primary, marginTop: 1 },
+  rowSoon: { fontSize: 11, color: color.muted2, marginTop: 1 },
+  logout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 50, marginTop: 22, borderRadius: 13, backgroundColor: color.errorTint },
+  logoutText: { fontSize: 14, fontWeight: "700", color: color.error },
+  version: { fontSize: 11, color: color.muted, textAlign: "center", marginTop: 14 },
 });
