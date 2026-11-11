@@ -216,7 +216,8 @@ export type SellerOrderDto = {
   cancelledAt: string | null;
   cancelReason: string | null;
   createdAt: string;
-  buyer: { fullName: string; isBusiness: boolean };
+  // phone is shared so the seller can call about the pickup; null when the buyer gave none.
+  buyer: { fullName: string; isBusiness: boolean; phone: string | null };
   listing: {
     id: string;
     title: string;
@@ -225,4 +226,26 @@ export type SellerOrderDto = {
     pickupEnd: string;
     imageUrl: string | null;
   };
+};
+
+// ---------- Activity (GET /seller/activity) ----------
+
+export const ACTIVITY_PERIODS = ["TODAY", "WEEK", "MONTH"] as const;
+export type ActivityPeriod = (typeof ACTIVITY_PERIODS)[number];
+
+// Days are in Sri Lanka time. "previous..." values cover the same length of time just before the period.
+export type SellerActivityDto = {
+  period: ActivityPeriod;
+  listingsCreated: number;
+  previousListingsCreated: number;
+  portionsReserved: number; // reserved in the period, cancelled ones excluded
+  portionsCollected: number; // picked up in the period
+  previousPortionsCollected: number;
+  portionsAwaiting: number; // reserved in the period and still waiting for pickup
+  portionsCancelled: number;
+  revenue: number; // total paid at pickup in the period
+  previousRevenue: number;
+  completionRate: number | null; // % of portions reserved in the period that were collected
+  last7Days: { date: string; collected: number }[];
+  revenueByListing: { title: string; portions: number; revenue: number }[];
 };
