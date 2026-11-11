@@ -116,12 +116,15 @@ Send only what changes: `name`, `type`, `description`, `contactNo`, `email`, `ad
 {
   "id": "uuid", "quantity": 2, "unitPrice": 220, "totalPrice": 440, "status": "CONFIRMED",
   "pickedUpAt": null, "cancelledAt": null, "cancelReason": null, "createdAt": "...",
-  "buyer": { "fullName": "Nimal Perera", "isBusiness": false },
+  "buyer": { "fullName": "Nimal Perera", "isBusiness": false, "phone": "0771234567" },
   "listing": { "id": "uuid", "title": "Rice & Curry", "unit": "PORTION", "pickupStart": "...", "pickupEnd": "...", "imageUrl": "https://..." }
 }
 ```
 
-The pickup code is never returned here: the seller must get it from the buyer.
+The pickup code is never returned here: the seller must get it from the buyer. `buyer.phone` is shared so the seller can call about the pickup (`null` if the buyer gave none).
+
+### GET /seller/orders/:id
+`200` `SellerOrderDto`. `404 ORDER_NOT_FOUND`.
 
 ### POST /seller/orders/verify
 Body `{ "code": "BG4821" }`: 6 letters or digits, lowercase accepted. Checks the code and changes nothing, so the seller can see what to hand over and how much to collect.
@@ -140,6 +143,14 @@ Both routes:
 | 409 | `RESERVATION_NOT_ACTIVE` | cancelled or expired |
 
 **For Nistha:** pickup codes must be saved as exactly 6 uppercase letters or digits to work with these routes.
+
+## Activity
+
+### GET /seller/activity?period=MONTH
+`period` is `TODAY`, `WEEK` (last 7 days) or `MONTH` (this calendar month, default). Days are in Sri Lanka time.
+`200` `SellerActivityDto`: `listingsCreated`, `portionsReserved` (cancelled excluded), `portionsCollected`, `portionsAwaiting`, `portionsCancelled`,
+`revenue` (paid at pickup), `completionRate` (% of portions reserved in the period that were collected, or `null`), `previous*` values for the same
+length of time just before, `last7Days` (`{ date, collected }`) and `revenueByListing` (top 5).
 
 ## Audit log actions
 
